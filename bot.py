@@ -1,12 +1,18 @@
 import asyncio
 import json
 import os
+import logging
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message
 from aiogram.exceptions import TelegramBadRequest
 
-CONFIG_PATH = "whitelist.json"  # solo per whitelist, non contiene il token
+from aiohttp import web  # mini server HTTP per Render
+
+logging.basicConfig(level=logging.INFO)
+
+CONFIG_PATH = "whitelist.json"  # solo whitelist, niente token qui
 
 def load_config():
     if not os.path.exists(CONFIG_PATH):
@@ -27,6 +33,19 @@ def set_topic_whitelist(cfg, chat_id, topic_id, ids):
     chat[str(topic_id)] = ids
     save_config(cfg)
 
+# ---- mini server HTTP per Render (espone una porta) ----
+async def start_http_server():
+    async def health(_):
+        return web.Response(text="OK")
+    app = web.Application()
+    app.router.add_get("/", health)
+    port = int(os.getenv("PORT", "8080"))  # Render passa PORT
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logging.info(f"HTTP health server listening on :{port}")
+
 async def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
@@ -39,7 +58,7 @@ async def main():
         try:
             member = await bot.get_chat_member(chat_id, user_id)
             return member.status in ("creator", "administrator")
-        except:
+        except Exception:
             return False
 
     @dp.message(Command("show_ids"))
@@ -84,6 +103,9 @@ async def main():
             except TelegramBadRequest:
                 pass
 
+    # Avvia HTTP + bot in parallelo
+    asyncio.create_task(start_http_server())
+    logging.info("Starting Telegram polling…")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
