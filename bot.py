@@ -6,9 +6,11 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from aiogram.exceptions import TelegramBadRequest
 
-CONFIG_PATH = "config.json"
+CONFIG_PATH = "whitelist.json"  # solo per whitelist, non contiene il token
 
 def load_config():
+    if not os.path.exists(CONFIG_PATH):
+        return {"whitelist": {}}
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -26,8 +28,11 @@ def set_topic_whitelist(cfg, chat_id, topic_id, ids):
     save_config(cfg)
 
 async def main():
-    cfg = load_config()
-    bot = Bot(cfg["bot_token"])
+    token = os.getenv("BOT_TOKEN")
+    if not token:
+        raise RuntimeError("BOT_TOKEN non trovato nelle variabili d'ambiente")
+
+    bot = Bot(token)
     dp = Dispatcher()
 
     async def is_admin(chat_id, user_id):
